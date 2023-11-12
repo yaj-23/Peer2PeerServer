@@ -50,7 +50,7 @@ int fd, nfds;
 fd_set rfds, afds;
 
 void registration(int, char *);
-int search_content(int, char *, PDU *);
+int search_content(int, char *, PDU *, struct sockaddr_in);
 int client_download(char *, PDU *);
 void server_download();
 void deregistration(int, char *);
@@ -160,7 +160,17 @@ int main(int argc, char **argv) {
 
             /*	Download Content	*/
             if (c == 'D') {
+                PDU spdu;
+                bzero(spdu.data, 100);
+                spdu.type = 'S';
+
                 /* Call search_content()	*/
+                char filename[10];
+                FILE *fp = NULL;
+
+                printf("\nEnter the filename you want to download: ");
+                scanf("%s", filename);
+                // search_content(s_sock, filename, )
                 /* Call client_download()	*/
                 /* Call registration()		*/
             }
@@ -197,15 +207,89 @@ void online_list(int s_sock) {
 void server_download() { /* Respond to the download request from a peer	*/
 }
 
-int search_content(int s_sock, char *name, PDU *rpdu) {
+int search_content(int s_sock, char *name, PDU *rpdu, struct sockaddr_in sin) {
     /* Contact index server to search for the content
        If the content is available, the index server will return
        the IP address and port number of the content server.	*/
+    PDU *searchPDU = malloc(sizeof(PDU));
+    bzero(searchPDU->data, 100);
+    searchPDU->type = 'S';
+    strcpy(searchPDU->data, name);
+
+    sendto(s_sock, searchPDU, sizeof(*searchPDU), 0,
+           (const struct sockaddr *)&sin, sizeof(sin));
+
+    bzero(searchPDU->data, 100);
+    // bzero(searchPDU->type, 1);
+    int len;
+    recvfrom(s_sock, searchPDU, sizeof(PDU), 0, (const struct sockaddr *)&sin,
+             &len);
+    printf("%s\n", searchPDU->data);
+    strcpy(rpdu->data, searchPDU->data);
 }
 
 int client_download(char *name, PDU *pdu) {
     /* Make TCP connection with the content server to initiate the
        Download.	*/
+    char *host;
+    int port = 3000;
+    struct hostent *phe;    /* pointer to host information entry	*/
+    struct sockaddr_in sin; /* an Internet endpoint address		*/
+    int alen = sizeof(sin);
+    int s, n, type; /* socket descriptor and socket type	*/
+
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(port);
+
+    /* Map host name to IP address, allowing for dotted decimal */
+    if (phe = gethostbyname(host)) {
+        memcpy(&sin.sin_addr, phe->h_addr, phe->h_length);
+    } else if ((sin.sin_addr.s_addr = inet_addr(host)) == INADDR_NONE)
+        fprintf(stderr, "Can't get host entry \n");
+
+    /* Allocate a socket */
+    s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) fprintf(stderr, "Can't create socket \n");
+
+    /* Connect the socket */
+    if (connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+        fprintf(stderr, "Can't connect to %s %s \n", host, "Time");
+    } else {
+        printf("Connected\n");
+
+        // Setting up data PDU to send to server
+        PDU *dataPDU = malloc(sizeof(PDU));
+        bzero(dataPDU->data, 100);
+        dataPDU->type = 'D';
+        strcpy(dataPDU->data, name);
+
+        sendto(s, dataPDU, sizeof(*dataPDU), 0, (const struct sockaddr *)&sin,
+               sizeof(sin));
+        FILE *fp;
+        fp = fopen(name, "wb");
+
+        // Server will send back content pdu
+        PDU *contentPDU = malloc(sizeof(PDU));
+        bzero(contentPDU->data, 1000);
+        int len, n;
+
+        while (contentPDU->type != 'F' && contentPDU->type != 'E') {
+            n = recvfrom(s, contentPDU, sizeof(*contentPDU), 0,
+                         (struct sockaddr *)&sin, &len);
+            fwrite(contentPDU->data, strlen(contentPDU->data), 1, fp);
+            bzero(contentPDU->data, 1000);
+        }
+
+        if (contentPDU->type == 'E')
+            printf("Error opening file!\n\n");
+        else {
+            printf("File download complete!\n");
+        }
+        fclose(fp);
+        close(s);
+        printf("Socket Closed!\n");
+    }
 }
 
 void deregistration(int s_sock, char *name) {
