@@ -54,7 +54,7 @@ int search_content(int, char *, PDU *, struct sockaddr_in);
 int client_download(char *, PDU *);
 void server_download();
 void deregistration(int, char *);
-void online_list(int);
+void online_list(int, struct sockaddr_in);
 void local_list();
 void quit(int);
 void handler();
@@ -111,7 +111,9 @@ int main(int argc, char **argv) {
     FD_SET(s_sock, &afds); /* Listening on the index server socket  */
     FD_SET(0, &afds);      /* Listening on the read descriptor   */
     nfds = 1;
-    for (n = 0; n < MAXCON; n++) table[n].val = -1;
+    for (n = 0; n < MAXCON; n++) {
+        table[n].val = -1;
+    }
 
     /*	Setup signal handler		*/
     sa.sa_handler = handler;
@@ -160,10 +162,6 @@ int main(int argc, char **argv) {
 
             /*	Download Content	*/
             if (c == 'D') {
-                PDU spdu;
-                bzero(spdu.data, 100);
-                spdu.type = 'S';
-
                 /* Call search_content()	*/
                 char filename[10];
                 FILE *fp = NULL;
@@ -200,8 +198,25 @@ void quit(int s_sock) {
 void local_list() { /* List local content	*/
 }
 
-void online_list(int s_sock) {
+void online_list(int s_sock, struct sockaddr_in sin) {
     /* Contact index server to acquire the list of content */
+    // making the OPDU to send to the index server
+    PDU *opdu = malloc(sizeof(PDU));
+    bzero(opdu->data, 100);
+    opdu->type = 'O';
+
+    // send OPDU to index server
+    int len;
+    sendto(s_sock, opdu, sizeof(PDU), 0, (struct sockaddr *)&sin, sizeof(sin));
+
+    // recieve data back from index server
+    PDU recievedPDU;
+    int len;
+    recvfrom(s_sock, &recievedPDU, sizeof(PDU), 0, (struct sockaddr *)&sin,
+             &len);
+
+    // just printing everything in the pdu for now
+    printf("%s/n", &(recievedPDU.data));
 }
 
 void server_download() { /* Respond to the download request from a peer	*/
@@ -211,21 +226,21 @@ int search_content(int s_sock, char *name, PDU *rpdu, struct sockaddr_in sin) {
     /* Contact index server to search for the content
        If the content is available, the index server will return
        the IP address and port number of the content server.	*/
-    PDU *searchPDU = malloc(sizeof(PDU));
-    bzero(searchPDU->data, 100);
-    searchPDU->type = 'S';
-    strcpy(searchPDU->data, name);
+    // creating an spdu to send to index server which contains filename
+    PDU *spdu = malloc(sizeof(PDU));
+    bzero(spdu->data, 100);
+    spdu->type = 'S';
+    strcpy(spdu->data, name);
 
-    sendto(s_sock, searchPDU, sizeof(*searchPDU), 0,
-           (const struct sockaddr *)&sin, sizeof(sin));
+    // sending the spdu to index server
+    sendto(s_sock, spdu, sizeof(*spdu), 0, (const struct sockaddr *)&sin,
+           sizeof(sin));
 
-    bzero(searchPDU->data, 100);
-    // bzero(searchPDU->type, 1);
+    // recieve data from index server
+    bzero(spdu->data, 100);
     int len;
-    recvfrom(s_sock, searchPDU, sizeof(PDU), 0, (const struct sockaddr *)&sin,
-             &len);
-    printf("%s\n", searchPDU->data);
-    strcpy(rpdu->data, searchPDU->data);
+    recvfrom(s_sock, spdu, sizeof(PDU), 0, (const struct sockaddr *)&sin, &len);
+    printf("%s\n", spdu->data);
 }
 
 int client_download(char *name, PDU *pdu) {
