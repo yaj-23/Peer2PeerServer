@@ -43,6 +43,7 @@ struct {
     char name[NAMESIZ];
 } table[MAXCON];  // Keep Track of the registered content
 
+int maxIndex = 0;
 char usr[NAMESIZ];
 
 int s_sock, peer_port;
@@ -312,11 +313,72 @@ void deregistration(int s_sock, char *name) {
      * nfds. */
 }
 
-void registration(int s_sock, char *name) {
+void registration(int s_sock, char *name, struct sockaddr_in server) {
     /* Create a TCP socket for content download
                     � one socket per content;
        Register the content to the index server;
        Update nfds;	*/
+
+    struct sockeraddr_in sin; /* an Internet endpoint address */
+    int alen = sizeof(sin);
+
+    int s, len, n, i; /* socker descriptor */
+    char port[10];
+
+
+    /* Allocate a socket, in TCP*/
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        fprintf(stderr, "Can't create a socket\n");
+        exit(1);
+    }
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(0);
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(s, (struct sockaddr *)&sin, alen) == -1) {
+        fprintf(stderr, "Can't bind name to socket\n");
+        exit(1);
+    }
+
+    listen(s, 3);
+
+    int blen = sizeof(struct sockaddr_in);
+    getsockname(s, (struct sockaddr *)&sin, &blen);
+    sprintf(port, "%d", ntohs(sin.sin_port));
+
+    PDU *regPDU = malloc(sizeof(PDU));
+    bzero(regPDU->data, 100);
+    regPDU->type = 'R';
+
+    strcat(regPDU->data, name);
+    strcat(regPDU->data, "|");
+    strcat(regPDU->data, usr);
+    strcat(regPDU->data, "|");
+    strcat(regPDU->data, inet_ntoa(reg_addr.sin_addr));
+    strcat(regPDU->data, "|");
+    strcat(regPDU->data, port);
+
+    sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server, sizeof(server));
+
+    PDU recPDU;
+    recvfrom(s_sock, &recPDU, sizeof(PDU), 0, (struct sockaddr *)&server, &len);
+
+    if (recPDU.type == 'A') {
+        strcpy(table[maxIndex].name, name);
+        for (int i = 0; i < maxIndex; i++) {
+            if (strcmp(table[i].name, "") && s >= nfds) {
+                nfds = s + 1;
+            }
+        }
+        table[maxIndex].sd = s;
+        FD_SET(s, &afds);
+        maxIndex++;
+        printf("%s\n", recPDU.data);
+    } else {
+        printf("Error: %s\n", recPDU.data);
+    }
+
 }
 
 void handler() { quit(s_sock); }
