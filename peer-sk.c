@@ -259,51 +259,43 @@ int client_download(char *name, PDU *pdu) {
     sin.sin_port = htons(port);
 
     /* Map host name to IP address, allowing for dotted decimal */
-    if (phe = gethostbyname(host)) {
-        memcpy(&sin.sin_addr, phe->h_addr, phe->h_length);
-    } else if ((sin.sin_addr.s_addr = inet_addr(host)) == INADDR_NONE)
-        fprintf(stderr, "Can't get host entry \n");
+    if (phe = gethostbyname(host))
+        bcopy(phe->h_addr_list[0], (char *)&sin.sin_addr, phe->h_length);
+    else if (inet_aton(host, (struct in_addr *)&sin.sin_addr)) {
+        fprintf(stderr, "Can't get server's address\n");
+        exit(1);
+    }
 
-    /* Allocate a socket */
-    s = socket(AF_INET, SOCK_DGRAM, 0);
-    if (s < 0) fprintf(stderr, "Can't create socket \n");
-
-    /* Connect the socket */
-    if (connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-        fprintf(stderr, "Can't connect to %s %s \n", host, "Time");
+    if (connect(s_sock, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+        fprintf(stderr, "Can't connect \n");
+        exit(1);
     } else {
-        printf("Connected\n");
-
         // Setting up data PDU to send to server
         PDU *dataPDU = malloc(sizeof(PDU));
         bzero(dataPDU->data, 100);
         dataPDU->type = 'D';
         strcpy(dataPDU->data, name);
 
-        sendto(s, dataPDU, sizeof(*dataPDU), 0, (const struct sockaddr *)&sin,
-               sizeof(sin));
-        FILE *fp;
-        fp = fopen(name, "wb");
+        write(s_sock, dataPDU->data, 100);
+
+        FILE *fptr = fopen(dataPDU->data, "wb");
 
         // Server will send back content pdu
         PDU *contentPDU = malloc(sizeof(PDU));
-        bzero(contentPDU->data, 1000);
+        bzero(contentPDU->data, 100);
         int len, n;
 
-        while (contentPDU->type != 'F' && contentPDU->type != 'E') {
-            n = recvfrom(s, contentPDU, sizeof(*contentPDU), 0,
-                         (struct sockaddr *)&sin, &len);
-            fwrite(contentPDU->data, strlen(contentPDU->data), 1, fp);
-            bzero(contentPDU->data, 1000);
+        while ((n = read(s_sock, contentPDU->data, sizeof(contentPDU->data))) >
+               0) {
+            if (contentPDU->data[0] == 'E') {
+                printf("Server Error: %s\n", contentPDU->data + 1);
+                remove(name);
+                break;
+            }
+            fwrite(contentPDU->data, 1, n, fptr);
         }
-
-        if (contentPDU->type == 'E')
-            printf("Error opening file!\n\n");
-        else {
-            printf("File download complete!\n");
-        }
-        fclose(fp);
-        close(s);
+        fclose(fptr);
+        close(s_sock);
         printf("Socket Closed!\n");
     }
 }
