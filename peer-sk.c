@@ -194,9 +194,19 @@ int main(int argc, char **argv) {
 
 void quit(int s_sock) {
     /* De-register all the registrations in the index server	*/
+    for (int i = 0; i < maxIndex; i++) {
+        if (strcmp(table[i].name, "")) {
+            deregistration(s_sock, table[i].name, server);
+        }
+    }
 }
 
 void local_list() { /* List local content	*/
+    for (int i = 0; i < maxIndex; i++) {
+        if (strcmp(table[i].name, "")) {
+            printf("[%d] %s\n", i + 1, table[i].name);
+        }
+    }
 }
 
 void online_list(int s_sock, struct sockaddr_in sin) {
@@ -300,9 +310,34 @@ int client_download(char *name, PDU *pdu) {
     }
 }
 
-void deregistration(int s_sock, char *name) {
+void deregistration(int s_sock, char *name, struct sockaddr_in server) {
     /* Contact the index server to deregister a content registration; Update
      * nfds. */
+
+    int xlen = sizeof(PDU);
+    PDU *tPDU = malloc(xlen);
+
+    bzero(tPDU->data, 100);
+    tPDU->type = 'T';
+    strcat(tPDU->data, name);
+    strcat(tPDU->data, "|");
+    strcat(tPDU->data, usr);
+
+    sendto(s_sock, tPDU, sizeof(*tPDU), 0, (const struct sockaddr *)&server, sizeof(server));
+
+    PDU recPDU;
+    int i,len;
+    recvfrom(s_sock, &recPDU, xlen, 0, (struct sockaddr *)&server, &len);
+    printf("%s\n", recPDU.data);
+
+    for (i =0; i < maxIndex; i++) {
+        if (!strcmp(name, table[i].name)) {
+            strcpy(table[i].name, "");
+            FD_CLR(table[i].sd, &afds);
+            close(table[i].sd);
+        }
+    }
+
 }
 
 void registration(int s_sock, char *name, struct sockaddr_in server) {
