@@ -80,7 +80,7 @@ char *Addr_to_char(struct sockaddr_in addr);
 
 int main(int argc, char *argv[])
 {
-    printf("binded");
+
     struct sockaddr_in sin, *p_addr; /* the from address of a client	*/
     ENTRY *p_entry;
 
@@ -136,7 +136,6 @@ int main(int argc, char *argv[])
         /*	Content Registration Request			*/
         if (rpdu.type == 'R')
         {
-            printf("%s", rpdu.data);
             registration(s, rpdu.data, &fsin);
             /*	Call registration()
              */
@@ -233,10 +232,16 @@ void registration(int s, char *data, struct sockaddr_in *addr)
     /* Register the content and the server of the content
      */
     // get user name from data packet (first 10 bytes)
-    char *user;
-    user = get_Username(data);
-    char *contentName;
-    contentName = get_ContentName(data);
+    char *res = strtok(data, "|");
+    char user[10];
+    strcpy(user, res);
+    // fprintf(stderr, "%s\n", user);
+    //  user = get_Username(data);
+    char contentName[10];
+    res = strtok(NULL, "|");
+    // contentName = get_ContentName(data);
+    strcpy(contentName, res);
+    // fprintf(stderr, "%s", contentName);
     int i = 0;
     for (i = 0; i <= max_index; i++)
     {
@@ -269,6 +274,7 @@ void registration(int s, char *data, struct sockaddr_in *addr)
         strcpy(list[max_index].name, contentName);
         list[max_index].head = create_Entry(user, addr);
         max_index++;
+        fprintf(stderr, "List: %s", list[0].name);
         send_Ack(s, *addr);
     }
     return;
@@ -298,7 +304,7 @@ PDU *create_Packet(char type, char *content)
     bzero(packet->data, 100);
     packet->type = type;
     strcpy(packet->data, content);
-    bzero(packet->data, 100);
+    // bzero(packet->data, 100);
     return packet;
 }
 
@@ -333,19 +339,24 @@ void send_Packet(int s, char type, char *content, struct sockaddr_in addr)
 
 char *get_Username(char *data)
 {
-    char *user;
+    char user[10];
+
     slice(data, user, 0, 11);
     return user;
 }
 char *get_ContentName(char *data)
 {
-    char *contentName;
+    char contentName[10];
     slice(data, contentName, 11, 21);
     return contentName;
 }
 void slice(const char *str, char *result, size_t start, size_t end)
 {
     strncpy(result, str + start, end - start);
+    fprintf(stderr, "%s\n", result);
+    fprintf(stderr, "%s\n", str);
+    fprintf(stderr, "%d\n", start);
+    fprintf(stderr, "%d\n", end);
 }
 // create linked list node
 ENTRY *create_Entry(char *data, struct sockaddr_in *addr)

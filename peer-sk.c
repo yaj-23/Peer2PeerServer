@@ -28,7 +28,7 @@ It provides the following functions:
 #define QUIT "quit"
 #define SERVER_PORT 10000 /* well-known port */
 #define BUFLEN 100        /* buffer length */
-#define NAMESIZ 20
+#define NAMESIZ 10
 #define MAXCON 200
 
 #define h_addr h_addr_list[0]
@@ -191,7 +191,7 @@ int main(int argc, char **argv)
                 fp = fopen(filename, "rb");
                 */
                 /* Call registration() */
-                registration(s_sock, "Hello.txt", server);
+                registration(s_sock, "Hello.txt ", server);
             }
 
             /*	List Content		*/
@@ -443,14 +443,15 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     bzero(regPDU->data, 100);
     regPDU->type = 'R';
     // fill out 10 bytes, remove delimiter
-    strcat(regPDU->data, name);
-    strcat(regPDU->data, "|");
     strcat(regPDU->data, usr);
     strcat(regPDU->data, "|");
-    // combine the port and addr fields
-    strcat(regPDU->data, inet_ntoa(sin.sin_addr));
+    strcat(regPDU->data, name);
     strcat(regPDU->data, "|");
-    strcat(regPDU->data, port);
+    //  combine the port and addr fields
+    //  strcat(regPDU->data, inet_ntoa(sin.sin_addr));
+    //  strcat(regPDU->data, port);
+    //  strcat(regPDU->data, "|");
+
     printf("%s", regPDU->data);
     sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server, sizeof(server));
 
@@ -470,7 +471,7 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
         table[maxIndex].val = s;
         FD_SET(s, &afds);
         maxIndex++;
-        printf("%s\n", recPDU.data);
+        printf("A: %s\n", recPDU.data);
     }
     else
     {
