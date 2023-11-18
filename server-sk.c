@@ -80,6 +80,7 @@ char *Addr_to_char(struct sockaddr_in addr);
 
 int main(int argc, char *argv[])
 {
+    printf("binded");
     struct sockaddr_in sin, *p_addr; /* the from address of a client	*/
     ENTRY *p_entry;
 
@@ -135,6 +136,7 @@ int main(int argc, char *argv[])
         /*	Content Registration Request			*/
         if (rpdu.type == 'R')
         {
+            printf("%s", rpdu.data);
             registration(s, rpdu.data, &fsin);
             /*	Call registration()
              */
@@ -439,5 +441,4 @@ int add_Entry(struct entry *head, char *user, struct sockaddr_in *addr)
     }
     return 0;
 }
-
 ////////////////////////////////////////////////////////////////////////////////
