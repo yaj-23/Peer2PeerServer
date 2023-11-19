@@ -218,6 +218,7 @@ int main(int argc, char **argv)
                 PDU rpdu;
                 scanf("%s", filename);
                 search_content(s_sock, filename, &rpdu, server);
+                client_download(filename, &rpdu);
                 /* Call client_download()	*/
                 /* Call registration()		*/
             }

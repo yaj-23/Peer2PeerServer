@@ -129,6 +129,7 @@ int main(int argc, char *argv[])
 
     while (1)
     {
+        fprintf(stderr, "Waiting for Packet: \n");
         if ((n = recvfrom(s, &rpdu, pdulen, 0, (struct sockaddr *)&fsin,
                           &alen)) < 0)
             printf("recvfrom error: n=%d\n", n);
@@ -177,11 +178,12 @@ void search(int s, char *data, struct sockaddr_in *addr)
     int i;
     ENTRY res;
 
-    for (i = 0; i <= max_index; i++)
+    for (i = 0; i < max_index; i++)
     {
-        if (strcmp(list[i].name, get_ContentName(data)) == 0)
+        if (strcmp(list[i].name, data) == 0)
         {
             res = search_Entry(list[i].head);
+
             send_Packet(s, 'S', Addr_to_char(res.addr), *addr);
             return;
         }
@@ -234,6 +236,7 @@ void registration(int s, char *data, struct sockaddr_in *addr)
     // get user name from data packet (first 10 bytes)
     char *res = strtok(data, "|");
     char user[10];
+
     strcpy(user, res);
     // fprintf(stderr, "%s\n", user);
     //  user = get_Username(data);
@@ -248,6 +251,7 @@ void registration(int s, char *data, struct sockaddr_in *addr)
         // content name exists in list
         if (!strcmp(list[i].name, contentName))
         {
+
             // look through list to see if user name already registered this
             // if yes, return error packet
             if (add_Entry(list[i].head, user, addr))
@@ -319,7 +323,7 @@ void send_Error(int s, struct sockaddr_in addr)
 {
     send_Packet(s, 'E', MSG1, addr);
     return;
-}
+} // TODO, ADDR_SINPORT NEEDED FOR CLIENT DL
 char *Addr_to_char(struct sockaddr_in addr)
 {
 
@@ -404,6 +408,7 @@ int delete_Entry(struct entry *head, char *user, struct sockaddr_in *addr)
         return 1;
     }
     else
+
     {
         temp = head;
         while (temp != NULL)
