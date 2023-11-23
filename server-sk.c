@@ -166,6 +166,10 @@ int main(int argc, char *argv[])
             /* Call deregistration()
              */
         }
+        else
+        {
+            continue;
+        }
     }
     return 0;
 }
@@ -183,7 +187,9 @@ void search(int s, char *data, struct sockaddr_in *addr)
         if (strcmp(list[i].name, data) == 0)
         {
             res = search_Entry(list[i].head);
-
+            // fprintf(stderr, "%p", &list[i].head);
+            fprintf(stderr, "Port check: %d\n", ntohs(res.addr.sin_port));
+            fprintf(stderr, "address check: %s\n", inet_ntoa(res.addr.sin_addr));
             send_Packet(s, 'S', Addr_to_char(res.addr), *addr);
             return;
         }
@@ -244,6 +250,14 @@ void registration(int s, char *data, struct sockaddr_in *addr)
     res = strtok(NULL, "|");
     // contentName = get_ContentName(data);
     strcpy(contentName, res);
+    char port[5];
+    res = strtok(NULL, "|");
+    // contentName = get_ContentName(data);
+    strcpy(port, res);
+
+    addr->sin_port = htons(port);
+    fprintf(stderr, "%d", ntohs(addr->sin_port));
+
     // fprintf(stderr, "%s", contentName);
     int i = 0;
     for (i = 0; i <= max_index; i++)
@@ -278,7 +292,7 @@ void registration(int s, char *data, struct sockaddr_in *addr)
         strcpy(list[max_index].name, contentName);
         list[max_index].head = create_Entry(user, addr);
         max_index++;
-        fprintf(stderr, "List: %s", list[0].name);
+        fprintf(stderr, "List: %s\n", list[0].name);
         send_Ack(s, *addr);
     }
     return;
@@ -326,8 +340,19 @@ void send_Error(int s, struct sockaddr_in addr)
 } // TODO, ADDR_SINPORT NEEDED FOR CLIENT DL
 char *Addr_to_char(struct sockaddr_in addr)
 {
+    char *address = malloc(sizeof(addr.sin_addr) + sizeof(addr.sin_port));
+    bzero(address, 21);
+    sprintf(address, "%s", inet_ntoa(addr.sin_addr));
+    fprintf(stderr, "%s\n", address);
+    char *port = malloc(sizeof(addr.sin_port));
+    fprintf(stderr, "%s", ntohs(addr.sin_port));
+    sprintf(port, "%d", ntohs(addr.sin_port));
 
-    return inet_ntoa(addr.sin_addr);
+    // bzero(port, 5);
+    fprintf(stderr, "%s\n", port);
+    strcat(address, port);
+    // fprintf(stderr, "%s\n", address);
+    return address;
 }
 // used to send packets TODO => work on sending through sd after packet created
 void send_Packet(int s, char type, char *content, struct sockaddr_in addr)

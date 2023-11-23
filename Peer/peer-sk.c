@@ -215,10 +215,10 @@ int main(int argc, char **argv)
                 FILE *fp = NULL;
 
                 printf("\nEnter the filename you want to download: ");
-                PDU rpdu;
+                PDU *rpdu = malloc(sizeof(PDU));
                 scanf("%s", filename);
-                search_content(s_sock, filename, &rpdu, server);
-                client_download(filename, &rpdu);
+                search_content(s_sock, filename, rpdu, server);
+                client_download(filename, rpdu);
                 /* Call client_download()	*/
                 /* Call registration()		*/
             }
@@ -366,13 +366,13 @@ void server_download(
     }
 }
 
-int search_content(int s_sock, char *name, PDU *rpdu, struct sockaddr_in sin)
+int search_content(int s_sock, char *name, PDU *spdu, struct sockaddr_in sin)
 {
     /* Contact index server to search for the content
        If the content is available, the index server will return
        the IP address and port number of the content server.	*/
     // creating an spdu to send to index server which contains filename
-    PDU *spdu = malloc(sizeof(PDU));
+
     bzero(spdu->data, 100);
     spdu->type = 'S';
     strcpy(spdu->data, name);
@@ -392,9 +392,22 @@ int client_download(char *name, PDU *pdu)
     /* Make TCP connection with the content server to initiate the
        Download.    */
 
-    int port = 3000;
+    // int port = 3000;
     struct hostent *phe;    /* pointer to host information entry    */
     struct sockaddr_in sin; /* an Internet endpoint address        */
+
+    char *res = strtok(pdu->data, ":");
+    char *ip = malloc(sizeof(sin.sin_addr));
+    bzero(ip, 15);
+    strcpy(ip, res);
+    // fprintf(stderr, "%s\n", user);
+    //  user = get_Username(data);
+    char *port = malloc(sizeof(sin.sin_port));
+    bzero(port, 5);
+    res = strtok(NULL, "\n");
+    strcpy(port, res);
+    printf("%s\n", port);
+
     int alen = sizeof(sin);
     int s, n, type; /* socket descriptor and socket type    */
 
@@ -405,7 +418,7 @@ int client_download(char *name, PDU *pdu)
     /* Map host name to IP address, allowing for dotted decimal */
     if (phe = gethostbyname(pdu->data))
         bcopy(phe->h_addr_list[0], (char *)&sin.sin_addr, phe->h_length);
-    else if (inet_aton(pdu->data, (struct in_addr *)&sin.sin_addr))
+    else if (inet_aton(ip, (struct in_addr *)&sin.sin_addr))
     {
         fprintf(stderr, "Can't get server's address\n");
         exit(1);
@@ -418,6 +431,7 @@ int client_download(char *name, PDU *pdu)
     }
     else
     {
+        printf("Connected\n");
         // Setting up data PDU to send to server
         PDU *dataPDU = malloc(sizeof(PDU));
         bzero(dataPDU->data, 100);

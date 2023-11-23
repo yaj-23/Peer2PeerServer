@@ -291,13 +291,13 @@ void server_download(
     {
         if (strcmp(table[i].name, ""))
         {
+            printf("reached\n");
             // printf("[%d] %s\n", i + 1, table[i].name);
             if (FD_ISSET(table[i].val, &rfds))
             {
                 struct sockaddr_in client;
                 int client_len = sizeof(client);
-                int new_sd =
-                    accept(s_sock, (struct sockaddr *)&client, &client_len);
+                int new_sd = accept(table[i].val, (struct sockaddr *)&client, &client_len);
                 if (new_sd >= 0)
                 {
                     printf("Connected\n");
@@ -396,10 +396,6 @@ int client_download(char *name, PDU *pdu)
     struct sockaddr_in sin; /* an Internet endpoint address        */
     int alen = sizeof(sin);
     int s, n, type; /* socket descriptor and socket type    */
-
-    memset(&sin, 0, sizeof(sin));
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(port);
 
     /* Map host name to IP address, allowing for dotted decimal */
     if (phe = gethostbyname(pdu->data))
@@ -527,8 +523,8 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     strcat(regPDU->data, "|");
     //  combine the port and addr fields
     //  strcat(regPDU->data, inet_ntoa(sin.sin_addr));
-    //  strcat(regPDU->data, port);
-    //  strcat(regPDU->data, "|");
+    strcat(regPDU->data, port);
+    strcat(regPDU->data, "|");
 
     printf("%s", regPDU->data);
     sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server, sizeof(server));
