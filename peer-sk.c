@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     FD_SET(0, &afds); /* Listening on the read descriptor   */
 
     FD_SET(s_sock, &afds); /* Listening on the index server socket  */
-    nfds = 1;
+    nfds = 0;
     for (n = 0; n < MAXCON; n++) {
         table[n].val = -1;
     }
@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
         printf("Command:\n");
 
         memcpy(&rfds, &afds, sizeof(rfds));
-        if (select(nfds, &rfds, NULL, NULL, NULL) < 0) {
+        if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0) {
             printf("select error: %s\n", strerror(errno));
             exit(1);
         }
@@ -203,8 +203,10 @@ int main(int argc, char **argv) {
                 }
                 /* Call quit()	*/
             }
+        } else {
+            fprintf(stderr, "reached");
+            server_download(s_sock);
         }
-
         /* Content transfer: Server to client		*/
     }
 }
@@ -251,60 +253,109 @@ void server_download(
                 int client_len = sizeof(client);
                 int new_sd = accept(table[i].val, (struct sockaddr *)&client,
                                     &client_len);
-                if (new_sd >= 0) {
-                    printf("Connected\n");
-
-                    PDU rec_pdu;
-                    int len;
-                    int n = read(new_sd, &rec_pdu, sizeof(PDU));
-                    printf("File wanted: %s\n", rec_pdu.data);
-                    FILE *fp;
-                    fp = fopen(rec_pdu.data, "rb");
-                    fseek(fp, 0L, SEEK_END);
-                    int filesize = ftell(fp);
-                    rewind(fp);
-                    int i = 0;
-
-                    PDU *cpdu = malloc(sizeof(PDU));
-                    bzero(cpdu->data, 100);
-
-                    while (i != filesize && cpdu->type != 'F') {
-                        if (filesize < 101 || i > filesize) {
-                            i = filesize < 101 ? filesize : filesize % 100;
-                            cpdu->type = 'F';
-                            cpdu->data[i] = '\0';
-                            printf("%c: %d/%d uploaded\n", cpdu->type, filesize,
-                                   filesize);
-                        } else {
-                            cpdu->type = 'C';
-                            printf("%c: %d/%d uploaded\n", cpdu->type, i,
-                                   filesize);
-                        }
-
-                        fread(cpdu->data,
-                              (filesize < 101 || i > filesize) ? i : 100, 1,
-                              fp);
-
-                        // sendto(new_sd, cpdu, sizeof(*cpdu), 0,
-                        //        (const struct sockaddr *)&client, client_len);
-
-                        if (write(new_sd, cpdu, sizeof(*cpdu)) < 0) {
-                            printf("\nWrite ERROR\n");
-                            fclose(fp);
-                            close(new_sd);
-                            break;
-                        }
-                        i += 100;
-                        bzero(cpdu->data, 100);
-                    }
-                    write(1, "Finished uploading!\n",
-                          strlen("Finished uploading!\n"));
-                    fclose(fp);
-                    close(new_sd);
-                    printf("Socket Closed!\n");
-                } else {
-                    printf("ERROR\n");
+                if (new_sd < 0) {
+                    fprintf(stderr, "Can't accept client \n");
+                    exit(1);
                 }
+                PDU recPDU;
+                char file[100];
+                char ch;
+                char packet[100];
+                char error[100];
+                int n = 0;
+
+                n = read(new_sd, recPDU, sizeof(PDU));
+                strcpy(file, recPDU.data);
+                printf("File Requested: %s\n", recPDU.data);
+                FILE *fptr = fopen(recPDU.data, "rb");
+                if (fptr == NULL) {
+                    printf("File not found.\n");
+                    int i;
+                    for (i = 0; i < 5; i++) {
+                        error[i] = 'E';
+                    }
+                    write(new_sd, error, 100);
+                    close(s_sock);
+                    exit(1);
+                }
+
+                PDU contentPDU;
+                contentPDU.type = 'C';
+                while ((n = fread(contentPDU.data, 1, 100, fptr)) > 0) {
+                    if (write(new_sd, contentPDU, n) < 0) {
+                        printf("\nWrite ERROR\n");
+                        fclose(fptr);
+                        close(new_sd);
+                        break;
+                    }
+                    printf("Data sent: %s\n", contentPDU.data);
+                    bzero(contentPDU.data, 100);
+                }
+
+                fclose(fptr);
+
+                close(new_sd);
+                printf("Socket closed\n");
+                exit(0);
+                // int client_len = sizeof(client);
+                // int new_sd = accept(table[i].val, (struct sockaddr *)&client,
+                //                     &client_len);
+                // if (new_sd >= 0) {
+                //     printf("Connected\n");
+
+                //     PDU rec_pdu;
+                //     int len;
+                //     int n = read(new_sd, &rec_pdu, sizeof(PDU));
+                //     printf("File wanted: %s\n", rec_pdu.data);
+                //     FILE *fp;
+                //     fp = fopen(rec_pdu.data, "rb");
+                //     fseek(fp, 0L, SEEK_END);
+                //     int filesize = ftell(fp);
+                //     rewind(fp);
+                //     int i = 0;
+
+                //     PDU *cpdu = malloc(sizeof(PDU));
+                //     bzero(cpdu->data, 100);
+
+                //     while (i != filesize && cpdu->type != 'F') {
+                //         if (filesize < 101 || i > filesize) {
+                //             i = filesize < 101 ? filesize : filesize % 100;
+                //             cpdu->type = 'F';
+                //             cpdu->data[i] = '\0';
+                //             printf("%c: %d/%d uploaded\n", cpdu->type,
+                //             filesize,
+                //                    filesize);
+                //         } else {
+                //             cpdu->type = 'C';
+                //             printf("%c: %d/%d uploaded\n", cpdu->type, i,
+                //                    filesize);
+                //         }
+
+                //         fread(cpdu->data,
+                //               (filesize < 101 || i > filesize) ? i : 100, 1,
+                //               fp);
+
+                //         // sendto(new_sd, cpdu, sizeof(*cpdu), 0,
+                //         //        (const struct sockaddr *)&client,
+                //         client_len);
+
+                //         if (write(new_sd, cpdu, sizeof(*cpdu)) < 0) {
+                //             printf("\nWrite ERROR\n");
+                //             fclose(fp);
+                //             close(new_sd);
+                //             break;
+                //         }
+                //         i += 100;
+                //         bzero(cpdu->data, 100);
+                //     }
+                //     write(1, "Finished uploading!\n",
+                //           strlen("Finished uploading!\n"));
+                //     fclose(fp);
+                //     close(new_sd);
+                //     printf("Socket Closed!\n");
+                // } else {
+                //     printf("ERROR\n");
+                // }
             }
         }
     }
@@ -350,11 +401,16 @@ int client_download(char *name, PDU *pdu) {
     strcpy(port, res);
 
     int alen = sizeof(sin);
-    int s, n, type; /* socket descriptor and socket type    */
+    int sd, s, n, type; /* socket descriptor and socket type    */
 
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(atoi(port));
+
+    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        fprintf(stderr, "Can't creat a socket\n");
+        exit(1);
+    }
 
     /* Map host name to IP address, allowing for dotted decimal */
     if (phe = gethostbyname(pdu->data))
@@ -364,7 +420,7 @@ int client_download(char *name, PDU *pdu) {
         exit(1);
     }
 
-    if (connect(s_sock, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+    if (connect(sd, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
         fprintf(stderr, "Can't connect \n");
         exit(1);
     } else {
@@ -375,9 +431,11 @@ int client_download(char *name, PDU *pdu) {
         bzero(dataPDU->data, 100);
         dataPDU->type = 'D';
         strcpy(dataPDU->data, name);
+        printf("data: %s\n", dataPDU->data);
+        printf("type: %c\n", dataPDU->type);
+        dataPDU->data[strlen(name)] = '\0';
+        write(sd, dataPDU, sizeof(PDU));
 
-        write(s_sock, dataPDU->data, 100);
-        printf("data: %sk\n", dataPDU->data);
         FILE *fptr = fopen(dataPDU->data, "wb");
 
         // Server will send back content pdu
@@ -385,8 +443,7 @@ int client_download(char *name, PDU *pdu) {
         bzero(contentPDU->data, 100);
         int len, n;
 
-        while ((n = read(s_sock, contentPDU->data, sizeof(contentPDU->data))) >
-               0) {
+        while ((n = read(sd, contentPDU->data, sizeof(contentPDU->data))) > 0) {
             if (contentPDU->data[0] == 'E') {
                 printf("Server Error: %s\n", contentPDU->data + 1);
                 remove(name);
@@ -395,9 +452,8 @@ int client_download(char *name, PDU *pdu) {
             fwrite(contentPDU->data, 1, n, fptr);
         }
         fclose(fptr);
-        close(s_sock);
+        close(sd);
         printf("Socket Closed!\n");
-        s_sock = -1;
     }
 }
 
