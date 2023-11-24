@@ -58,7 +58,7 @@ void deregistration(int, char *, struct sockaddr_in *);
 
 ////////////////////Helpers///////////////////////////
 ENTRY search_Entry(ENTRY *head);
-ENTRY *create_Entry(char *data, struct sockaddr_in *addr);
+ENTRY *create_Entry(char *data, struct sockaddr_in addr);
 void send_Packet(int s, char type, char *content, struct sockaddr_in addr);
 void send_Error(int s, struct sockaddr_in addr);
 PDU *create_Packet(char type, char *content);
@@ -253,9 +253,8 @@ void registration(int s, char *data, struct sockaddr_in *addr)
     res = strtok(NULL, "|");
     // contentName = get_ContentName(data);
     strcpy(port, res);
-    fprintf(stderr, "%s", port);
-    addr->sin_port = htons(port);
-
+    addr->sin_port = htons((atoi(port)));
+    fprintf(stderr, "\n%d\n", ntohs(addr->sin_port));
     // fprintf(stderr, "%s", contentName);
     int i = 0;
     for (i = 0; i <= max_index; i++)
@@ -287,9 +286,11 @@ void registration(int s, char *data, struct sockaddr_in *addr)
     {
         // if here, it means this is a new content piece to be added
         strcpy(list[max_index].name, contentName);
-        list[max_index].head = create_Entry(user, addr);
+        fprintf(stderr, "\n%d\n", ntohs(addr->sin_port));
+
+        list[max_index].head = create_Entry(user, *addr);
+        fprintf(stderr, "\n%d\n", ntohs(list[max_index].head->addr.sin_port));
         max_index++;
-        fprintf(stderr, "List: %s\n", list[0].name);
         send_Ack(s, *addr);
     }
     return;
@@ -327,14 +328,14 @@ PDU *create_Packet(char type, char *content)
 // used for sending acknowledgement that operaition was successful
 void send_Ack(int s, struct sockaddr_in addr)
 {
-    send_Packet(s, 'A', MSG2, addr);
+    send_Packet(s, 'A', "Ack", addr);
     return;
 }
 // used for sending error packet => work on sending through sd after packet
 // created
 void send_Error(int s, struct sockaddr_in addr)
 {
-    send_Packet(s, 'E', MSG1, addr);
+    send_Packet(s, 'E', "Error", addr);
     return;
 }
 char *Addr_to_char(struct sockaddr_in addr)
@@ -352,7 +353,9 @@ char *Addr_to_char(struct sockaddr_in addr)
 // used to send packets TODO => work on sending through sd after packet created
 void send_Packet(int s, char type, char *content, struct sockaddr_in addr)
 {
-    PDU *packet = create_Packet(type, content);
+    PDU *packet = malloc(sizeof(PDU));
+    packet = create_Packet(type, content);
+
     sendto(s, packet, sizeof(*packet), 0, (const struct sockaddr *)&addr,
            sizeof(addr));
     return;
@@ -383,11 +386,11 @@ void slice(const char *str, char *result, size_t start, size_t end)
     fprintf(stderr, "%d\n", end);
 }
 // create linked list node
-ENTRY *create_Entry(char *data, struct sockaddr_in *addr)
+ENTRY *create_Entry(char *data, struct sockaddr_in addr)
 {
-    ENTRY *user;
+    ENTRY *user = malloc(sizeof(ENTRY));
     strcpy(user->usr, data);
-    user->addr = *addr;
+    user->addr = addr;
     user->token = 0;
     user->next = NULL;
     return user;
@@ -464,7 +467,7 @@ int add_Entry(struct entry *head, char *user, struct sockaddr_in *addr)
 {
     ENTRY *newContent, *temp;
 
-    newContent = create_Entry(user, addr);
+    newContent = create_Entry(user, *addr);
     if (head == NULL)
     {
         head = newContent;

@@ -227,7 +227,7 @@ int main(int argc, char **argv)
         /* Content transfer: Server to client		*/
         else
         {
-            printf("reached server_download\n");
+            fprintf(stderr, "reached server_download\n");
             server_download(s_sock);
         }
     }
@@ -514,10 +514,11 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     fprintf(stderr, "%s\n", regPDU->data);
     sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server, sizeof(server));
 
-    PDU recPDU;
-    recvfrom(s_sock, &recPDU, sizeof(PDU), 0, (struct sockaddr *)&server, &len);
+    bzero(regPDU->data, 100);
 
-    if (recPDU.type == 'A')
+    recvfrom(s_sock, regPDU, sizeof(PDU), 0, (const struct sockaddr *)&server, &len);
+    fprintf(stderr, "%c\n", regPDU->type);
+    if (regPDU->type == 'A')
     {
         strcpy(table[maxIndex].name, name);
         for (int i = 0; i < maxIndex; i++)
@@ -530,11 +531,16 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
         table[maxIndex].val = s;
         FD_SET(s, &afds);
         maxIndex++;
-        printf("A: %s\n", recPDU.data);
+        fprintf(stderr, "A: %s\n", regPDU->data);
+    }
+    else if (regPDU->type == 'E')
+    {
+        fprintf(stderr, "Error:\n");
     }
     else
     {
-        printf("Error: %s\n", recPDU.data);
+
+        fprintf(stderr, "NUll: %s\n", regPDU->data);
     }
 }
 
