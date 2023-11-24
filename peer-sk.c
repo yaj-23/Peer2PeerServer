@@ -58,8 +58,8 @@ void server_download();
 void deregistration(int, char *, struct sockaddr_in);
 void online_list(int, struct sockaddr_in);
 void local_list();
-void quit(int);
-void handler();
+void quit(int, struct sockaddr_in);
+void handler(struct sockaddr_in);
 
 int main(int argc, char **argv) {
     int s_port = SERVER_PORT;
@@ -150,22 +150,24 @@ int main(int argc, char **argv) {
 
             /*	Content Regisration	*/
             if (c == 'R') {
-                /*
-                                FILE *fp = NULL;
+                FILE *fp = NULL;
                 char filename[10];
                 printf("\nEnter the filename you want to register: ");
                 scanf("%s", filename);
                 printf("%s", filename);
 
                 fp = fopen(filename, "rb");
-                */
-                /* Call registration() */
-                registration(s_sock, "Hello.txt", server);
+                if (fp == NULL) {
+                    printf("Invalid File Name\n");
+                } else {
+                    fclose(fp);
+                    registration(s_sock, filename, server);
+                }
             }
 
             /*	List Content		*/
             if (c == 'L') {
-                /* Call local_list()	*/
+                local_list();
             }
 
             /*	List on-line Content	*/
@@ -191,17 +193,16 @@ int main(int argc, char **argv) {
 
             /*	Content Deregistration	*/
             if (c == 'T') {
-                /* Call deregistration()	*/
-            }
-
-            /*	Quit	*/
-            if (c == 'Q') {
                 for (int i = 0; i < maxIndex; i++) {
                     if (strcmp(table[i].name, "")) {
                         deregistration(s_sock, table[i].name, server);
                     }
                 }
-                /* Call quit()	*/
+            }
+
+            /*	Quit	*/
+            if (c == 'Q') {
+                quit(s_sock, server);
             }
         } else {
             fprintf(stderr, "reached");
@@ -211,7 +212,14 @@ int main(int argc, char **argv) {
     }
 }
 
-void quit(int s_sock) {}
+void quit(int s_sock, struct sockaddr_in server) {
+    for (int i = 0; i < maxIndex; i++) {
+        if (strcmp(table[i].name, "")) {
+            deregistration(s_sock, table[i].name, server);
+        }
+    }
+    exit(0);
+}
 
 void local_list() { /* List local content	*/
     for (int i = 0; i < maxIndex; i++) {
@@ -234,11 +242,13 @@ void online_list(int s_sock, struct sockaddr_in sin) {
 
     // recieve data back from index server
     PDU recievedPDU;
-    recvfrom(s_sock, &recievedPDU, sizeof(PDU), 0, (struct sockaddr *)&sin,
-             &len);
+    while (recievedPDU.type != 'F') {
+        recvfrom(s_sock, &recievedPDU, sizeof(PDU), 0, (struct sockaddr *)&sin,
+                 &len);
+        printf("%s\n", &(recievedPDU.data));
+    }
 
     // just printing everything in the pdu for now
-    printf("%s\n", &(recievedPDU.data));
 }
 
 void server_download(
@@ -264,7 +274,7 @@ void server_download(
                 char error[100];
                 int n = 0;
 
-                n = read(new_sd, recPDU, sizeof(PDU));
+                n = read(new_sd, &recPDU, sizeof(PDU));
                 strcpy(file, recPDU.data);
                 printf("File Requested: %s\n", recPDU.data);
                 FILE *fptr = fopen(recPDU.data, "rb");
@@ -279,83 +289,23 @@ void server_download(
                     exit(1);
                 }
 
-                PDU contentPDU;
-                contentPDU.type = 'C';
-                while ((n = fread(contentPDU.data, 1, 100, fptr)) > 0) {
-                    if (write(new_sd, contentPDU, n) < 0) {
+                PDU *contentPDU = malloc(sizeof(PDU));
+                contentPDU->type = 'C';
+                while ((n = fread(contentPDU->data, 1, 100, fptr)) > 0) {
+                    printf("Packet size: %d\n", n);
+                    if (write(new_sd, contentPDU, n + 1) < 0) {
                         printf("\nWrite ERROR\n");
                         fclose(fptr);
                         close(new_sd);
                         break;
                     }
-                    printf("Data sent: %s\n", contentPDU.data);
-                    bzero(contentPDU.data, 100);
+                    printf("Data sent: %s\n", contentPDU->data);
+                    bzero(contentPDU->data, 100);
                 }
 
                 fclose(fptr);
-
                 close(new_sd);
-                printf("Socket closed\n");
-                exit(0);
-                // int client_len = sizeof(client);
-                // int new_sd = accept(table[i].val, (struct sockaddr *)&client,
-                //                     &client_len);
-                // if (new_sd >= 0) {
-                //     printf("Connected\n");
-
-                //     PDU rec_pdu;
-                //     int len;
-                //     int n = read(new_sd, &rec_pdu, sizeof(PDU));
-                //     printf("File wanted: %s\n", rec_pdu.data);
-                //     FILE *fp;
-                //     fp = fopen(rec_pdu.data, "rb");
-                //     fseek(fp, 0L, SEEK_END);
-                //     int filesize = ftell(fp);
-                //     rewind(fp);
-                //     int i = 0;
-
-                //     PDU *cpdu = malloc(sizeof(PDU));
-                //     bzero(cpdu->data, 100);
-
-                //     while (i != filesize && cpdu->type != 'F') {
-                //         if (filesize < 101 || i > filesize) {
-                //             i = filesize < 101 ? filesize : filesize % 100;
-                //             cpdu->type = 'F';
-                //             cpdu->data[i] = '\0';
-                //             printf("%c: %d/%d uploaded\n", cpdu->type,
-                //             filesize,
-                //                    filesize);
-                //         } else {
-                //             cpdu->type = 'C';
-                //             printf("%c: %d/%d uploaded\n", cpdu->type, i,
-                //                    filesize);
-                //         }
-
-                //         fread(cpdu->data,
-                //               (filesize < 101 || i > filesize) ? i : 100, 1,
-                //               fp);
-
-                //         // sendto(new_sd, cpdu, sizeof(*cpdu), 0,
-                //         //        (const struct sockaddr *)&client,
-                //         client_len);
-
-                //         if (write(new_sd, cpdu, sizeof(*cpdu)) < 0) {
-                //             printf("\nWrite ERROR\n");
-                //             fclose(fp);
-                //             close(new_sd);
-                //             break;
-                //         }
-                //         i += 100;
-                //         bzero(cpdu->data, 100);
-                //     }
-                //     write(1, "Finished uploading!\n",
-                //           strlen("Finished uploading!\n"));
-                //     fclose(fp);
-                //     close(new_sd);
-                //     printf("Socket Closed!\n");
-                // } else {
-                //     printf("ERROR\n");
-                // }
+                break;
             }
         }
     }
@@ -433,23 +383,25 @@ int client_download(char *name, PDU *pdu) {
         strcpy(dataPDU->data, name);
         printf("data: %s\n", dataPDU->data);
         printf("type: %c\n", dataPDU->type);
-        dataPDU->data[strlen(name)] = '\0';
+        // dataPDU->data[strlen(name)] = '\0';
         write(sd, dataPDU, sizeof(PDU));
 
-        FILE *fptr = fopen(dataPDU->data, "wb");
+        FILE *fptr = fopen(dataPDU->data, "w");
 
         // Server will send back content pdu
         PDU *contentPDU = malloc(sizeof(PDU));
         bzero(contentPDU->data, 100);
         int len, n;
 
-        while ((n = read(sd, contentPDU->data, sizeof(contentPDU->data))) > 0) {
-            if (contentPDU->data[0] == 'E') {
+        while ((n = read(sd, contentPDU, sizeof(PDU))) > 0) {
+            if (contentPDU->type == 'E') {
                 printf("Server Error: %s\n", contentPDU->data + 1);
                 remove(name);
                 break;
             }
-            fwrite(contentPDU->data, 1, n, fptr);
+            printf("Data Recieved: %s\n", contentPDU->data);
+            fwrite(contentPDU->data, 1, n - 1, fptr);
+            bzero(contentPDU->data, 100);
         }
         fclose(fptr);
         close(sd);
@@ -460,9 +412,7 @@ int client_download(char *name, PDU *pdu) {
 void deregistration(int s_sock, char *name, struct sockaddr_in server) {
     /* Contact the index server to deregister a content registration; Update
      * nfds. */
-
-    int xlen = sizeof(PDU);
-    PDU *tPDU = malloc(xlen);
+    PDU *tPDU = malloc(sizeof(PDU));
 
     bzero(tPDU->data, 100);
     tPDU->type = 'T';
@@ -470,12 +420,12 @@ void deregistration(int s_sock, char *name, struct sockaddr_in server) {
     strcat(tPDU->data, "|");
     strcat(tPDU->data, usr);
 
-    sendto(s_sock, tPDU, sizeof(*tPDU), 0, (const struct sockaddr *)&server,
+    sendto(s_sock, tPDU, sizeof(PDU), 0, (const struct sockaddr *)&server,
            sizeof(server));
 
     PDU recPDU;
     int i, len;
-    recvfrom(s_sock, &recPDU, xlen, 0, (struct sockaddr *)&server, &len);
+    recvfrom(s_sock, &recPDU, sizeof(PDU), 0, (struct sockaddr *)&server, &len);
     printf("%s\n", recPDU.data);
 
     for (i = 0; i < maxIndex; i++) {
@@ -559,4 +509,4 @@ void registration(int s_sock, char *name, struct sockaddr_in server) {
     }
 }
 
-void handler() { quit(s_sock); }
+void handler(struct sockaddr_in server) { quit(s_sock, server); }

@@ -59,7 +59,6 @@ ENTRY *create_Entry(char *data, struct sockaddr_in addr);
 void send_Packet(int s, char type, char *content, struct sockaddr_in addr);
 void send_Error(int s, struct sockaddr_in addr);
 PDU *create_Packet(char type, char *content);
-void slice(const char *str, char *result, size_t start, size_t end);
 char *get_Username(char *data);
 char *get_ContentName(char *data);
 int add_Entry(struct entry *head, char *user, struct sockaddr_in *addr);
@@ -143,7 +142,7 @@ int main(int argc, char *argv[]) {
         if (rpdu.type == 'O') {
             /* Read from the content list and send the list to the
                client 		*/
-            char *content[max_index];
+            char *content = malloc(10 * (max_index));
             content_List(s, content, max_index, fsin);
         }
 
@@ -185,29 +184,64 @@ void search(int s, char *data, struct sockaddr_in *addr) {
 void deregistration(int s, char *data, struct sockaddr_in *addr) {
     /* De-register the server of that content
      */
-    char *user;
-    user = get_Username(data);
-    char *contentName;
-    contentName = get_ContentName(data);
+    char *res = strtok(data, "|");
+    char contentName[10];
+
+    strcpy(contentName, res);
+    // fprintf(stderr, "%s\n", user);
+    //  user = get_Username(data);
+    char user[10];
+    res = strtok(NULL, "|");
+    // contentName = get_ContentName(data);
+    strcpy(user, res);
+
     int i = 0;
+    int j = max_index;
     for (i = 0; i <= max_index; i++) {
         // content name exists in list
-        if (!strcmp(list[i].name, contentName)) {
+        if (strcmp(list[i].name, contentName) == 0) {
             // look through list to see if user is not registered
             // if yes, return error packet
-            if (delete_Entry(list[i].head, user, addr)) {
-                send_Error(s, *addr);
-                return;
-            } else {
-                send_Ack(s, *addr);
+            ENTRY *temp, *prev;
+            temp = list[i].head;
+            prev = NULL;
+            while (temp != NULL) {
+                if (strcmp(temp->usr, user) == 0) {
+                    if (prev == NULL) {
+                        fprintf(stderr, "deleted head\n");
+                        // case where head node is the one to be deleted
+                        list[i].head = list[i].head->next;
+                        if (list[i].head == NULL) {
+                            j--;
+                            strcpy(list[i].name, "");
+                            fprintf(stderr, "actually deleted head\n");
+                        }
+                    } else {
+                        prev->next = temp->next;
+                        temp = NULL;
+                    }
+                    send_Ack(s, *addr);
+                    break;
+                }
+                prev = temp;
+                temp = temp->next;
             }
+            // if (n == 1) {
+            //     send_Error(s, *addr);
+            //     return;
+            // } else {
+            //     if (n == 2) {
+            //         fprintf(stderr, "head is null\n");
+
+            //     }
+
+            // }
             // otw, removed correctly
-            return;
         }
+
+        // send_Error(s, *addr);
     }
-
-    send_Error(s, *addr);
-
+    max_index = j;
     return;
 }
 
@@ -216,31 +250,37 @@ void registration(int s, char *data, struct sockaddr_in *addr) {
      */
     // get user name from data packet (first 10 bytes)
     char *res = strtok(data, "|");
-    char user[10];
+    char *user = malloc(10);
 
     strcpy(user, res);
-    // fprintf(stderr, "%s\n", user);
+
     //  user = get_Username(data);
-    char contentName[10];
+    char *contentName = malloc(10);
     res = strtok(NULL, "|");
+
     // contentName = get_ContentName(data);
     strcpy(contentName, res);
-    char port[5];
+    char *port = malloc(5);
     res = strtok(NULL, "|");
-    // contentName = get_ContentName(data);
+    fprintf(stderr, "before copy bs: %s\n", user);
+    fprintf(stderr, "after copy: %s\n", contentName);
     strcpy(port, res);
+    fprintf(stderr, "after copy: %s\n", user);
+    fprintf(stderr, "after copy: %s\n", contentName);
     struct sockaddr_in *new_addr = malloc(sizeof(struct sockaddr_in));
     new_addr->sin_addr = addr->sin_addr;
     new_addr->sin_port = htons(atoi(port));
     // addr->sin_port = htons((atoi(port)));
     // fprintf(stderr, "\n%d\n", ntohs(addr->sin_port));
     // fprintf(stderr, "%s", contentName);
+
     int i = 0;
     for (i = 0; i <= max_index; i++) {
         // content name exists in list
         if (!strcmp(list[i].name, contentName)) {
             // look through list to see if user name already registered this
-            // if yes, return error packet
+            // if yes, return error packe
+            fprintf(stderr, "user: %s\n", user);
             if (add_Entry(list[i].head, user, new_addr)) {
                 send_Error(s, *addr);
                 return;  // change this to error packet
@@ -257,11 +297,8 @@ void registration(int s, char *data, struct sockaddr_in *addr) {
     } else {
         // if here, it means this is a new content piece to be added
         strcpy(list[max_index].name, contentName);
-        // fprintf(stderr, "\n%d\n", ntohs(addr->sin_port));
 
         list[max_index].head = create_Entry(user, *new_addr);
-        // fprintf(stderr, "\n%d\n",
-        // ntohs(list[max_index].head->addr.sin_port));
         max_index++;
         send_Ack(s, *addr);
     }
@@ -273,13 +310,15 @@ void registration(int s, char *data, struct sockaddr_in *addr) {
 void content_List(int s, char *strings[], size_t size,
                   struct sockaddr_in addr) {
     // make sure size >= 2 here, based on your actual logic
-    int i;
+    int i, j = 0;
     for (i = 0; i <= max_index; i++) {
         if (list[i].head != NULL) {
-            strings[i] = list[i].name;
+            // strings[j] = list[i].name;
+            // j++;
+            send_Packet(s, 'O', list[i].name, addr);
         }
     }
-    send_Packet(s, 'O', *strings, addr);
+    send_Packet(s, 'F', "", addr);
 }
 
 //////////////////Packet Helpers////////////////////////
@@ -312,10 +351,10 @@ char *Addr_to_char(struct sockaddr_in addr) {
     bzero(port, 6);
     sprintf(port, "%d", ntohs(addr.sin_port));
     strcat(address, port);
-    fprintf(stderr, "Address: %s\n", address);
     return address;
 }
-// used to send packets TODO => work on sending through sd after packet created
+// used to send packets TODO => work on sending through sd after packet
+// created
 void send_Packet(int s, char type, char *content, struct sockaddr_in addr) {
     PDU *packet = malloc(sizeof(PDU));
     packet = create_Packet(type, content);
@@ -327,24 +366,6 @@ void send_Packet(int s, char type, char *content, struct sockaddr_in addr) {
 
 /////////////////Entry Struct Helpers////////////////////////
 
-char *get_Username(char *data) {
-    char user[10];
-
-    slice(data, user, 0, 11);
-    return user;
-}
-char *get_ContentName(char *data) {
-    char contentName[10];
-    slice(data, contentName, 11, 21);
-    return contentName;
-}
-void slice(const char *str, char *result, size_t start, size_t end) {
-    strncpy(result, str + start, end - start);
-    fprintf(stderr, "%s\n", result);
-    fprintf(stderr, "%s\n", str);
-    fprintf(stderr, "%d\n", start);
-    fprintf(stderr, "%d\n", end);
-}
 // create linked list node
 ENTRY *create_Entry(char *data, struct sockaddr_in addr) {
     ENTRY *user = malloc(sizeof(ENTRY));
@@ -363,16 +384,16 @@ ENTRY search_Entry(struct entry *head) {
         return *res;
     } else {
         temp = head;
-        if (head->next == NULL) {
-            head->token++;
-            return *head;
-        }
-        while (temp->next != NULL) {
+        // if (head->next == NULL) {
+        //     head->token++;
+        //     return *head;
+        // }
+        while (temp != NULL) {
+            fprintf(stderr, "here in search\n");
             if (temp->token < LRU) {
                 LRU = temp->token;
                 res = temp;
             }
-            fprintf(stderr, "Entry: %s\n", temp->usr);
             temp = temp->next;
         }
     }
@@ -389,11 +410,16 @@ int delete_Entry(struct entry *head, char *user, struct sockaddr_in *addr) {
 
     {
         temp = head;
+        prev = NULL;
         while (temp != NULL) {
             if (strcmp(temp->usr, user) == 0) {
                 if (prev == NULL) {
+                    fprintf(stderr, "deleted head\n");
                     // case where head node is the one to be deleted
                     head = head->next;
+                    if (head == NULL) {
+                        fprintf(stderr, "actually deleted head\n");
+                    }
                 } else {
                     prev->next = temp->next;
                     temp = NULL;
@@ -409,7 +435,7 @@ int delete_Entry(struct entry *head, char *user, struct sockaddr_in *addr) {
 // linkedlist traversal
 int add_Entry(struct entry *head, char *user, struct sockaddr_in *addr) {
     ENTRY *newContent, *temp;
-
+    fprintf(stderr, "gsgs %s\n", user);
     newContent = create_Entry(user, *addr);
     if (head == NULL) {
         head = newContent;
