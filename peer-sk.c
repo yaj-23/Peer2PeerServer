@@ -117,8 +117,9 @@ int main(int argc, char **argv)
 
     /* Initialization of SELECT`structure and table structure	*/
     FD_ZERO(&afds);
+    FD_SET(0, &afds); /* Listening on the read descriptor   */
+
     FD_SET(s_sock, &afds); /* Listening on the index server socket  */
-    FD_SET(0, &afds);      /* Listening on the read descriptor   */
     nfds = 1;
     for (n = 0; n < MAXCON; n++)
     {
@@ -137,7 +138,7 @@ int main(int argc, char **argv)
         printf("Command:\n");
 
         memcpy(&rfds, &afds, sizeof(rfds));
-        if (select(nfds, &rfds, NULL, NULL, NULL) == -1)
+        if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0)
         {
             printf("select error: %s\n", strerror(errno));
             exit(1);
@@ -163,25 +164,6 @@ int main(int argc, char **argv)
             if (c == 'R')
             {
                 /*
-                DIR *d;
-                struct dirent *dir;
-                d = opendir(".");
-                int count = 1;
-                char filename[10];
-                if (d)
-                {
-                    while ((dir = readdir(d)) != NULL)
-                    {
-                        if (dir->d_type == DT_REG)
-                        {
-                            printf("\n[%d] %s", count, dir->d_name);
-                        }
-                        count++;
-                    }
-                    closedir(d);
-                }
-
-
                 FILE *fp = NULL;
                 char filename[10];
                 printf("\nEnter the filename you want to register: ");
@@ -244,7 +226,10 @@ int main(int argc, char **argv)
 
         /* Content transfer: Server to client		*/
         else
+        {
+            printf("reached server_download\n");
             server_download(s_sock);
+        }
     }
 }
 
@@ -526,7 +511,7 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     strcat(regPDU->data, port);
     strcat(regPDU->data, "|");
 
-    printf("%s", regPDU->data);
+    fprintf(stderr, "%s\n", regPDU->data);
     sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server, sizeof(server));
 
     PDU recPDU;
