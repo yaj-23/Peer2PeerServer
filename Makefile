@@ -13,10 +13,9 @@ INCLUDE =
 DEFS =
 CFLAGS = ${DEFS} ${INCLUDE}
 
-client:
-	${CC} -o peer peer-sk.c -lnsl  
-
-server:
+all:
+	${CC} -o peer peer-sk.c -lnsl 
+	${CC} -o Peer/peer peer-sk.c -lnsl   
 	${CC} -o server server-sk.c  -lnsl
 
 

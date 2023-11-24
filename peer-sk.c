@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
         printf("Command:\n");
 
         memcpy(&rfds, &afds, sizeof(rfds));
-        if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0) {
+        if (select(nfds, &rfds, NULL, NULL, NULL) < 0) {
             printf("select error: %s\n", strerror(errno));
             exit(1);
         }
@@ -206,10 +206,6 @@ int main(int argc, char **argv) {
         }
 
         /* Content transfer: Server to client		*/
-        else {
-            fprintf(stderr, "reached server_download\n");
-            server_download(s_sock);
-        }
     }
 }
 
@@ -245,9 +241,10 @@ void online_list(int s_sock, struct sockaddr_in sin) {
 
 void server_download(
     int s_sock) { /* Respond to the download request from a peer    */
+    fprintf(stderr, "reached\n");
     for (int i = 0; i < maxIndex; i++) {
         if (strcmp(table[i].name, "")) {
-            printf("reached\n");
+            fprintf(stderr, "reached\n");
             // printf("[%d] %s\n", i + 1, table[i].name);
             if (FD_ISSET(table[i].val, &rfds)) {
                 struct sockaddr_in client;
@@ -351,14 +348,13 @@ int client_download(char *name, PDU *pdu) {
     bzero(port, 5);
     res = strtok(NULL, "\n");
     strcpy(port, res);
-    printf("%s\n", port);
 
     int alen = sizeof(sin);
     int s, n, type; /* socket descriptor and socket type    */
 
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
-    sin.sin_port = htons(port);
+    sin.sin_port = htons(atoi(port));
 
     /* Map host name to IP address, allowing for dotted decimal */
     if (phe = gethostbyname(pdu->data))
@@ -373,6 +369,7 @@ int client_download(char *name, PDU *pdu) {
         exit(1);
     } else {
         printf("Connected\n");
+
         // Setting up data PDU to send to server
         PDU *dataPDU = malloc(sizeof(PDU));
         bzero(dataPDU->data, 100);
@@ -380,7 +377,7 @@ int client_download(char *name, PDU *pdu) {
         strcpy(dataPDU->data, name);
 
         write(s_sock, dataPDU->data, 100);
-
+        printf("data: %sk\n", dataPDU->data);
         FILE *fptr = fopen(dataPDU->data, "wb");
 
         // Server will send back content pdu
@@ -400,6 +397,7 @@ int client_download(char *name, PDU *pdu) {
         fclose(fptr);
         close(s_sock);
         printf("Socket Closed!\n");
+        s_sock = -1;
     }
 }
 
@@ -483,12 +481,11 @@ void registration(int s_sock, char *name, struct sockaddr_in server) {
     sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server,
            sizeof(server));
 
-    bzero(regPDU->data, 100);
+    PDU recPDU;
+    recvfrom(s_sock, &recPDU, sizeof(PDU), 0, (const struct sockaddr *)&server,
+             sizeof(server));
 
-    recvfrom(s_sock, regPDU, sizeof(PDU), 0, (const struct sockaddr *)&server,
-             &len);
-    fprintf(stderr, "%c\n", regPDU->type);
-    if (regPDU->type == 'A') {
+    if (recPDU.type == 'A') {
         strcpy(table[maxIndex].name, name);
         for (int i = 0; i < maxIndex; i++) {
             if (strcmp(table[i].name, "") && s >= nfds) {
@@ -498,11 +495,11 @@ void registration(int s_sock, char *name, struct sockaddr_in server) {
         table[maxIndex].val = s;
         FD_SET(s, &afds);
         maxIndex++;
-        fprintf(stderr, "A: %s\n", regPDU->data);
-    } else if (regPDU->type == 'E') {
+        fprintf(stderr, "A: %s\n", recPDU.data);
+    } else if (recPDU.type == 'E') {
         fprintf(stderr, "Error:\n");
     } else {
-        fprintf(stderr, "NUll: %s\n", regPDU->data);
+        fprintf(stderr, "NUll: %s\n", recPDU.data);
     }
 }
 
