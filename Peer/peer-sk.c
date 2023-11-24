@@ -10,6 +10,7 @@ It provides the following functions:
 */
 #define _XOPEN_SOURCE 700
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -23,7 +24,6 @@ It provides the following functions:
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <dirent.h>
 
 #define QUIT "quit"
 #define SERVER_PORT 10000 /* well-known port */
@@ -33,18 +33,16 @@ It provides the following functions:
 
 #define h_addr h_addr_list[0]
 
-typedef struct
-{
+typedef struct {
     char type;
     char data[BUFLEN];
 } PDU;
 PDU rpdu;
 
-struct
-{
+struct {
     int val;
     char name[NAMESIZ];
-} table[MAXCON]; // Keep Track of the registered content
+} table[MAXCON];  // Keep Track of the registered content
 
 int maxIndex = 0;
 char usr[NAMESIZ];
@@ -63,8 +61,7 @@ void local_list();
 void quit(int);
 void handler();
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     int s_port = SERVER_PORT;
     int n;
     int alen = sizeof(struct sockaddr_in);
@@ -73,18 +70,17 @@ int main(int argc, char **argv)
     char c, *host, name[NAMESIZ];
     struct sigaction sa;
 
-    switch (argc)
-    {
-    case 2:
-        host = argv[1];
-        break;
-    case 3:
-        host = argv[1];
-        s_port = atoi(argv[2]);
-        break;
-    default:
-        printf("Usage: %s host [port]\n", argv[0]);
-        exit(1);
+    switch (argc) {
+        case 2:
+            host = argv[1];
+            break;
+        case 3:
+            host = argv[1];
+            s_port = atoi(argv[2]);
+            break;
+        default:
+            printf("Usage: %s host [port]\n", argv[0]);
+            exit(1);
     }
 
     /* UDP Connection with the index server		*/
@@ -93,20 +89,17 @@ int main(int argc, char **argv)
     server.sin_port = htons(s_port);
     if (hp = gethostbyname(host))
         memcpy(&server.sin_addr, hp->h_addr, hp->h_length);
-    else if ((server.sin_addr.s_addr = inet_addr(host)) == INADDR_NONE)
-    {
+    else if ((server.sin_addr.s_addr = inet_addr(host)) == INADDR_NONE) {
         printf("Can't get host entry \n");
         exit(1);
     }
     s_sock = socket(PF_INET, SOCK_DGRAM,
-                    0); // Allocate a socket for the index server
-    if (s_sock < 0)
-    {
+                    0);  // Allocate a socket for the index server
+    if (s_sock < 0) {
         printf("Can't create socket \n");
         exit(1);
     }
-    if (connect(s_sock, (struct sockaddr *)&server, sizeof(server)) < 0)
-    {
+    if (connect(s_sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
         printf("Can't connect \n");
         exit(1);
     }
@@ -117,11 +110,11 @@ int main(int argc, char **argv)
 
     /* Initialization of SELECT`structure and table structure	*/
     FD_ZERO(&afds);
+    FD_SET(0, &afds); /* Listening on the read descriptor   */
+
     FD_SET(s_sock, &afds); /* Listening on the index server socket  */
-    FD_SET(0, &afds);      /* Listening on the read descriptor   */
     nfds = 1;
-    for (n = 0; n < MAXCON; n++)
-    {
+    for (n = 0; n < MAXCON; n++) {
         table[n].val = -1;
     }
 
@@ -132,24 +125,20 @@ int main(int argc, char **argv)
     sigaction(SIGINT, &sa, NULL);
 
     /* Main Loop	*/
-    while (1)
-    {
+    while (1) {
         printf("Command:\n");
 
         memcpy(&rfds, &afds, sizeof(rfds));
-        if (select(nfds, &rfds, NULL, NULL, NULL) == -1)
-        {
+        if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0) {
             printf("select error: %s\n", strerror(errno));
             exit(1);
         }
 
-        if (FD_ISSET(0, &rfds))
-        { /* Command from the user  */
+        if (FD_ISSET(0, &rfds)) { /* Command from the user  */
             c = getchar();
 
             /*	Command options	*/
-            if (c == '?')
-            {
+            if (c == '?') {
                 printf(
                     "R-Content Registration; T-Content Deregistration; L-List "
                     "Local Content\n");
@@ -160,29 +149,9 @@ int main(int argc, char **argv)
             }
 
             /*	Content Regisration	*/
-            if (c == 'R')
-            {
+            if (c == 'R') {
                 /*
-                DIR *d;
-                struct dirent *dir;
-                d = opendir(".");
-                int count = 1;
-                char filename[10];
-                if (d)
-                {
-                    while ((dir = readdir(d)) != NULL)
-                    {
-                        if (dir->d_type == DT_REG)
-                        {
-                            printf("\n[%d] %s", count, dir->d_name);
-                        }
-                        count++;
-                    }
-                    closedir(d);
-                }
-
-
-                FILE *fp = NULL;
+                                FILE *fp = NULL;
                 char filename[10];
                 printf("\nEnter the filename you want to register: ");
                 scanf("%s", filename);
@@ -195,21 +164,18 @@ int main(int argc, char **argv)
             }
 
             /*	List Content		*/
-            if (c == 'L')
-            {
+            if (c == 'L') {
                 /* Call local_list()	*/
             }
 
             /*	List on-line Content	*/
-            if (c == 'O')
-            {
+            if (c == 'O') {
                 online_list(s_sock, server);
                 /* Call online_list()	*/
             }
 
             /*	Download Content	*/
-            if (c == 'D')
-            {
+            if (c == 'D') {
                 /* Call search_content()	*/
                 char filename[10];
                 FILE *fp = NULL;
@@ -224,18 +190,14 @@ int main(int argc, char **argv)
             }
 
             /*	Content Deregistration	*/
-            if (c == 'T')
-            {
+            if (c == 'T') {
                 /* Call deregistration()	*/
             }
 
             /*	Quit	*/
-            if (c == 'Q')
-            {
-                for (int i = 0; i < maxIndex; i++)
-                {
-                    if (strcmp(table[i].name, ""))
-                    {
+            if (c == 'Q') {
+                for (int i = 0; i < maxIndex; i++) {
+                    if (strcmp(table[i].name, "")) {
                         deregistration(s_sock, table[i].name, server);
                     }
                 }
@@ -244,28 +206,24 @@ int main(int argc, char **argv)
         }
 
         /* Content transfer: Server to client		*/
-        else
+        else {
+            fprintf(stderr, "reached server_download\n");
             server_download(s_sock);
+        }
     }
 }
 
-void quit(int s_sock)
-{
-}
+void quit(int s_sock) {}
 
-void local_list()
-{ /* List local content	*/
-    for (int i = 0; i < maxIndex; i++)
-    {
-        if (strcmp(table[i].name, ""))
-        {
+void local_list() { /* List local content	*/
+    for (int i = 0; i < maxIndex; i++) {
+        if (strcmp(table[i].name, "")) {
             printf("[%d] %s\n", i + 1, table[i].name);
         }
     }
 }
 
-void online_list(int s_sock, struct sockaddr_in sin)
-{
+void online_list(int s_sock, struct sockaddr_in sin) {
     /* Contact index server to acquire the list of content */
     // making the OPDU to send to the index server
     PDU *opdu = malloc(sizeof(PDU));
@@ -286,21 +244,17 @@ void online_list(int s_sock, struct sockaddr_in sin)
 }
 
 void server_download(
-    int s_sock)
-{ /* Respond to the download request from a peer    */
-    for (int i = 0; i < maxIndex; i++)
-    {
-        if (strcmp(table[i].name, ""))
-        {
+    int s_sock) { /* Respond to the download request from a peer    */
+    for (int i = 0; i < maxIndex; i++) {
+        if (strcmp(table[i].name, "")) {
+            printf("reached\n");
             // printf("[%d] %s\n", i + 1, table[i].name);
-            if (FD_ISSET(table[i].val, &rfds))
-            {
+            if (FD_ISSET(table[i].val, &rfds)) {
                 struct sockaddr_in client;
                 int client_len = sizeof(client);
-                int new_sd =
-                    accept(s_sock, (struct sockaddr *)&client, &client_len);
-                if (new_sd >= 0)
-                {
+                int new_sd = accept(table[i].val, (struct sockaddr *)&client,
+                                    &client_len);
+                if (new_sd >= 0) {
                     printf("Connected\n");
 
                     PDU rec_pdu;
@@ -317,18 +271,14 @@ void server_download(
                     PDU *cpdu = malloc(sizeof(PDU));
                     bzero(cpdu->data, 100);
 
-                    while (i != filesize && cpdu->type != 'F')
-                    {
-                        if (filesize < 101 || i > filesize)
-                        {
+                    while (i != filesize && cpdu->type != 'F') {
+                        if (filesize < 101 || i > filesize) {
                             i = filesize < 101 ? filesize : filesize % 100;
                             cpdu->type = 'F';
                             cpdu->data[i] = '\0';
                             printf("%c: %d/%d uploaded\n", cpdu->type, filesize,
                                    filesize);
-                        }
-                        else
-                        {
+                        } else {
                             cpdu->type = 'C';
                             printf("%c: %d/%d uploaded\n", cpdu->type, i,
                                    filesize);
@@ -341,8 +291,7 @@ void server_download(
                         // sendto(new_sd, cpdu, sizeof(*cpdu), 0,
                         //        (const struct sockaddr *)&client, client_len);
 
-                        if (write(new_sd, cpdu, sizeof(*cpdu)) < 0)
-                        {
+                        if (write(new_sd, cpdu, sizeof(*cpdu)) < 0) {
                             printf("\nWrite ERROR\n");
                             fclose(fp);
                             close(new_sd);
@@ -356,9 +305,7 @@ void server_download(
                     fclose(fp);
                     close(new_sd);
                     printf("Socket Closed!\n");
-                }
-                else
-                {
+                } else {
                     printf("ERROR\n");
                 }
             }
@@ -366,8 +313,7 @@ void server_download(
     }
 }
 
-int search_content(int s_sock, char *name, PDU *spdu, struct sockaddr_in sin)
-{
+int search_content(int s_sock, char *name, PDU *spdu, struct sockaddr_in sin) {
     /* Contact index server to search for the content
        If the content is available, the index server will return
        the IP address and port number of the content server.	*/
@@ -387,8 +333,7 @@ int search_content(int s_sock, char *name, PDU *spdu, struct sockaddr_in sin)
     printf("%s\n", spdu->data);
 }
 
-int client_download(char *name, PDU *pdu)
-{
+int client_download(char *name, PDU *pdu) {
     /* Make TCP connection with the content server to initiate the
        Download.    */
 
@@ -418,19 +363,15 @@ int client_download(char *name, PDU *pdu)
     /* Map host name to IP address, allowing for dotted decimal */
     if (phe = gethostbyname(pdu->data))
         bcopy(phe->h_addr_list[0], (char *)&sin.sin_addr, phe->h_length);
-    else if (inet_aton(ip, (struct in_addr *)&sin.sin_addr))
-    {
+    else if (inet_aton(ip, (struct in_addr *)&sin.sin_addr)) {
         fprintf(stderr, "Can't get server's address\n");
         exit(1);
     }
 
-    if (connect(s_sock, (struct sockaddr *)&sin, sizeof(sin)) == -1)
-    {
+    if (connect(s_sock, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
         fprintf(stderr, "Can't connect \n");
         exit(1);
-    }
-    else
-    {
+    } else {
         printf("Connected\n");
         // Setting up data PDU to send to server
         PDU *dataPDU = malloc(sizeof(PDU));
@@ -448,10 +389,8 @@ int client_download(char *name, PDU *pdu)
         int len, n;
 
         while ((n = read(s_sock, contentPDU->data, sizeof(contentPDU->data))) >
-               0)
-        {
-            if (contentPDU->data[0] == 'E')
-            {
+               0) {
+            if (contentPDU->data[0] == 'E') {
                 printf("Server Error: %s\n", contentPDU->data + 1);
                 remove(name);
                 break;
@@ -464,8 +403,7 @@ int client_download(char *name, PDU *pdu)
     }
 }
 
-void deregistration(int s_sock, char *name, struct sockaddr_in server)
-{
+void deregistration(int s_sock, char *name, struct sockaddr_in server) {
     /* Contact the index server to deregister a content registration; Update
      * nfds. */
 
@@ -478,17 +416,16 @@ void deregistration(int s_sock, char *name, struct sockaddr_in server)
     strcat(tPDU->data, "|");
     strcat(tPDU->data, usr);
 
-    sendto(s_sock, tPDU, sizeof(*tPDU), 0, (const struct sockaddr *)&server, sizeof(server));
+    sendto(s_sock, tPDU, sizeof(*tPDU), 0, (const struct sockaddr *)&server,
+           sizeof(server));
 
     PDU recPDU;
     int i, len;
     recvfrom(s_sock, &recPDU, xlen, 0, (struct sockaddr *)&server, &len);
     printf("%s\n", recPDU.data);
 
-    for (i = 0; i < maxIndex; i++)
-    {
-        if (!strcmp(name, table[i].name))
-        {
+    for (i = 0; i < maxIndex; i++) {
+        if (!strcmp(name, table[i].name)) {
             strcpy(table[i].name, "");
             FD_CLR(table[i].val, &afds);
             close(table[i].val);
@@ -496,8 +433,7 @@ void deregistration(int s_sock, char *name, struct sockaddr_in server)
     }
 }
 
-void registration(int s_sock, char *name, struct sockaddr_in server)
-{
+void registration(int s_sock, char *name, struct sockaddr_in server) {
     /* Create a TCP socket for content download
                     � one socket per content;
        Register the content to the index server;
@@ -510,8 +446,7 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     char port[10];
 
     /* Allocate a socket, in TCP*/
-    if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-    {
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Can't create a socket\n");
         exit(1);
     }
@@ -520,8 +455,7 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     sin.sin_port = htons(0);
     sin.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(s, (struct sockaddr *)&sin, alen) == -1)
-    {
+    if (bind(s, (struct sockaddr *)&sin, alen) == -1) {
         fprintf(stderr, "Can't bind name to socket\n");
         exit(1);
     }
@@ -542,33 +476,33 @@ void registration(int s_sock, char *name, struct sockaddr_in server)
     strcat(regPDU->data, "|");
     //  combine the port and addr fields
     //  strcat(regPDU->data, inet_ntoa(sin.sin_addr));
-    //  strcat(regPDU->data, port);
-    //  strcat(regPDU->data, "|");
+    strcat(regPDU->data, port);
+    strcat(regPDU->data, "|");
 
-    printf("%s", regPDU->data);
-    sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server, sizeof(server));
+    fprintf(stderr, "%s\n", regPDU->data);
+    sendto(s_sock, regPDU, sizeof(*regPDU), 0, (const struct sockaddr *)&server,
+           sizeof(server));
 
-    PDU recPDU;
-    recvfrom(s_sock, &recPDU, sizeof(PDU), 0, (struct sockaddr *)&server, &len);
+    bzero(regPDU->data, 100);
 
-    if (recPDU.type == 'A')
-    {
+    recvfrom(s_sock, regPDU, sizeof(PDU), 0, (const struct sockaddr *)&server,
+             &len);
+    fprintf(stderr, "%c\n", regPDU->type);
+    if (regPDU->type == 'A') {
         strcpy(table[maxIndex].name, name);
-        for (int i = 0; i < maxIndex; i++)
-        {
-            if (strcmp(table[i].name, "") && s >= nfds)
-            {
+        for (int i = 0; i < maxIndex; i++) {
+            if (strcmp(table[i].name, "") && s >= nfds) {
                 nfds = s + 1;
             }
         }
         table[maxIndex].val = s;
         FD_SET(s, &afds);
         maxIndex++;
-        printf("A: %s\n", recPDU.data);
-    }
-    else
-    {
-        printf("Error: %s\n", recPDU.data);
+        fprintf(stderr, "A: %s\n", regPDU->data);
+    } else if (regPDU->type == 'E') {
+        fprintf(stderr, "Error:\n");
+    } else {
+        fprintf(stderr, "NUll: %s\n", regPDU->data);
     }
 }
 
